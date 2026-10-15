@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:rte="clr-namespace:Syncfusion.Maui.RichTextEditor;assembly=Syncfusion.Maui.RichTextEditor"
+             x:Class="SfRTEPerformance.BenchmarkEditorPage"
+             Title="SfRichTextEditor">
+
+    <Grid RowDefinitions="Auto,*,Auto" Padding="10">
+
+        <!-- Result banner shown at the top of the editor page -->
+        <Label x:Name="ResultLabel"
+               Grid.Row="0"
+               Padding="16,12"
+               FontSize="14"
+               TextColor="White"
+               BackgroundColor="#512BD4"
+               LineBreakMode="WordWrap" />
+
+        <!-- The SfRichTextEditor under measurement. Toolbar is hidden so it
+             does not skew the initial-load measurement. -->
+        <rte:SfRichTextEditor x:Name="richTextEditor"
+                              Grid.Row="1"
+                              ShowToolbar="True"
+                              Placeholder="Editor under benchmark..."
+                              Loaded="richTextEditor_Loaded"
+                              VerticalOptions="Fill"
+                              HorizontalOptions="Fill" />
+
+        <!-- Explicit Back button so the user has a clear way to return to
+             the benchmark page on every platform. The hardware / gesture
+             back button works too, but a visible button is friendlier. -->
+        <Button Grid.Row="2"
+                Text="Back to Benchmarks"
+                Clicked="OnBackClicked"
+                HorizontalOptions="Fill"
+                Margin="0" />
+    </Grid>
+</ContentPage>

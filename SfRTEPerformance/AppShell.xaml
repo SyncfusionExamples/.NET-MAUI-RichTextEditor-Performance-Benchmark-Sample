@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="SfRTEPerformance.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:SfRTEPerformance"
+    Title="SfRTEPerformance">
+
+    <ShellContent
+        Title="Benchmarks"
+        ContentTemplate="{DataTemplate local:BenchmarkPage}"
+        Route="BenchmarkPage" />
+
+</Shell>
