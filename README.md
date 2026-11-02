@@ -8,14 +8,14 @@ straightforward pages.
 
 ## Purpose
 
-Provide an open, reproducible way to measure three key performance
+Provide an open, reproducible way to measure two key performance
 characteristics of `SfRichTextEditor`:
 
 1. **Initial Load** — how long it takes, from the moment the user taps
    a button, to construct an editor page, instantiate the
    `SfRichTextEditor`, assign the chosen HTML payload to its `Value`
    property, lay it out, navigate to the page, and have the editor
-   render its first text. Measured per scenario (empty / 100 / 5,000 /
+   render its first text. Measured per scenario (empty / 1,000 / 5,000 /
    10,000 words) because the time depends on the document size.
 2. **Dynamic Value Update** — how long it takes to assign a new HTML
    payload to the `Value` property of an already-loaded editor and have
@@ -26,8 +26,6 @@ characteristics of `SfRichTextEditor`:
    reassignment on the SAME editor instance. The reported number
    excludes the editor's initial-load time so it reflects only the
    reassignment itself.
-3. **Large Document Load** — how long it takes to load a 10,000-paragraph
-   HTML document.
 
 The numbers you see on screen are produced locally on your device or
 emulator and depend on the host hardware, the OS, the available memory,
@@ -39,9 +37,9 @@ different devices.
 
 | Benchmark | Description | Document Sizes |
 |-----------|-------------|----------------|
-| Initial Load (per-scenario buttons on the benchmark page) | From click to the editor's first text being rendered, with the HTML pre-assigned in the editor page's constructor | Empty, 100 / 5,000 / 10,000 words |
+| Initial Load (per-scenario buttons on the benchmark page) | From click to the editor's first text being rendered, with the HTML pre-assigned in the editor page's constructor | Empty, 1,000 / 5,000 / 10,000 words |
 | Dynamic Value Update (three buttons on the editor page) | Reassign `Value` once on an already-loaded editor; only the reassignment time is measured | 100 / 5,000 / 10,000 words |
-| 10,000 Paragraphs | Assign a large document to `Value` | 10,000 `<p>` elements |
+| Apply Format | From format-button click to the editor's `FormatChanged` event | N/A — operates on the seeded text |
 
 ## How the Timing Values Are Measured
 
@@ -123,9 +121,6 @@ document being committed. This is the user-perceived time.
   construct the editor. Note that the assignment itself only *enqueues*
   the payload for the WebView; stopping at the end of the assignment
   would report the cost of an enqueue, not a load.
-* **10,000 Paragraphs** — the same marker mechanism, with the HTML
-  generated once up front so that HTML generation is **not** included in
-  the measurement.
 * **Apply Format** — measured from the format-button click to the
   `FormatChanged` event. This path is genuinely synchronous inside the
   control, so the event is a valid endpoint here.
@@ -172,9 +167,9 @@ dotnet run --project tools/selftest/SelfTest.csproj
 ```
 
 It asserts that the millisecond formatter keeps sub-millisecond precision,
-that the marker survives the HTML-to-text projection intact in both
-generators, that markers are unique per run, and that the word-count
-generator produces the requested number of words.
+that the marker survives the HTML-to-text projection intact, that
+markers are unique per run, and that the word-count generator produces
+the requested number of words.
 
 ### UX details
 
@@ -189,6 +184,12 @@ generator produces the requested number of words.
 * The three Dynamic Value buttons on the editor page are hidden for
   Initial Load scenarios — they only appear when the editor was opened
   in Dynamic Value mode.
+* The benchmark page subscribes to the results sink in `OnDisappearing`
+  and unsubscribes in `OnAppearing`. The subscription is therefore
+  active for the entire window in which any editor or format page is
+  on screen — including the Dynamic Value Update buttons, which publish
+  results asynchronously, long after this page's click handler has
+  returned.
 * The **Clear Results** button resets the on-screen results section.
 * The results panel is fixed at 240 px tall and the buttons live in a
   scroll region above it, so the two never visually overlap.
@@ -212,7 +213,8 @@ SfRTEPerformance/
 │                                        measurement endpoint)
 ├── BenchmarkFormat.cs                   Shared millisecond formatting
 ├── HtmlGenerator.cs                     Helpers that build the test HTML
-│                                        (words and paragraphs)
+│                                        (words only — paragraphs are still
+│                                        available in code but unused)
 ├── BenchmarkResultsSink.cs              Tiny static sink so the editor
 │                                        page can push result lines back
 │                                        to the benchmark page
@@ -224,10 +226,9 @@ SfRTEPerformance/
                                          Syncfusion.Maui.RichTextEditor)
 
 tools/
-├── selftest/                            Standalone harness that verifies the
-│                                        marker's survival and the
-│                                        word-count generator's sizing
-└── (analysis helpers used while designing the probe)
+└── selftest/                            Standalone harness that verifies the
+                                         marker's survival and the
+                                         word-count generator's sizing
 ```
 ## Example Output
 
@@ -238,9 +239,9 @@ Initial Load (Empty)
 Empty: 12.40 ms
 
 ======================================
-Initial Load (100 Words)
+Initial Load (1,000 Words)
 ======================================
-100 Words: 35.20 ms
+1,000 Words: 38.10 ms
 
 ======================================
 Initial Load (5,000 Words)
@@ -255,9 +256,9 @@ Dynamic Value Update
 10,000 Words Value Update: 420.91 ms
 
 ======================================
-10,000 Paragraphs
+Apply Format
 ======================================
-10,000 Paragraphs: 2450.63 ms
+Format (Bold): 4.12 ms
 ```
 
 The Dynamic Value Update section shows three measurements: one per tap on
