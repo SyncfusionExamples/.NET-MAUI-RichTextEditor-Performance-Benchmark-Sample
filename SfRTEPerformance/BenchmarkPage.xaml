@@ -5,18 +5,13 @@
              Title="SfRichTextEditor Benchmarks">
 
     <!--
-        The whole page is one vertical stack with two regions:
-          1. The action buttons (header + 5 buttons) — wrapped in a ScrollView
-             so they remain reachable on very short screens, but normally sit
-             at the top of the page.
-          2. The results section — fixed 240 px height, pinned to the bottom
-             of the viewport. Fixed height guarantees the results panel can
-             never visually overlap the buttons above it.
+        Two regions stacked vertically:
+          Row 0: action buttons inside a ScrollView (in case the screen is short)
+          Row 1: fixed-height results panel pinned to the bottom
     -->
     <Grid Padding="16" RowSpacing="12"
           RowDefinitions="*,240">
 
-        <!-- Region 1: header + buttons -->
         <ScrollView Grid.Row="0">
             <VerticalStackLayout Spacing="10">
 
@@ -29,12 +24,8 @@
                            TextColor="Gray" />
                 </VerticalStackLayout>
 
-                <!-- Section 1: Initial Load — click a button, the editor
-                     page is constructed with the matching HTML pre-assigned
-                     in the constructor. The clock runs from the click until
-                     the editor confirms it has ingested the document —
-                     not until the control raises Loaded, which happens long
-                     before the text is rendered. -->
+                <!-- Initial Load: from click to the document being rendered.
+                     One button per word-count scenario. -->
                 <Label Text="Initial Load (measured until the content is actually rendered)"
                        FontSize="13"
                        FontAttributes="Bold"
@@ -45,19 +36,19 @@
                         Clicked="OnRunInitialLoadEmptyClicked"
                         HorizontalOptions="Fill" />
 
-                <Button x:Name="InitialLoad10KbButton"
-                        Text="Run Initial Load (10 KB)"
-                        Clicked="OnRunInitialLoad10KbClicked"
+                <Button x:Name="InitialLoad100Button"
+                        Text="Run Initial Load (100 Words)"
+                        Clicked="OnRunInitialLoad100Clicked"
                         HorizontalOptions="Fill" />
 
-                <Button x:Name="InitialLoad500KbButton"
-                        Text="Run Initial Load (500 KB)"
-                        Clicked="OnRunInitialLoad500KbClicked"
+                <Button x:Name="InitialLoad5KButton"
+                        Text="Run Initial Load (5,000 Words)"
+                        Clicked="OnRunInitialLoad5KClicked"
                         HorizontalOptions="Fill" />
 
-                <Button x:Name="InitialLoad1MbButton"
-                        Text="Run Initial Load (1 MB)"
-                        Clicked="OnRunInitialLoad1MbClicked"
+                <Button x:Name="InitialLoad10KButton"
+                        Text="Run Initial Load (10,000 Words)"
+                        Clicked="OnRunInitialLoad10KClicked"
                         HorizontalOptions="Fill" />
 
                 <Button x:Name="TenKParagraphsButton"
@@ -65,10 +56,11 @@
                         Clicked="OnRunTenKParagraphsClicked"
                         HorizontalOptions="Fill" />
 
-                <!-- Section 2: Dynamic Value Update — re-assigns the
-                     Value property on an already-loaded editor four
-                     times (10 KB, 100 KB, 500 KB, 1 MB). -->
-                <Label Text="Dynamic Value Update (re-assign Value, measured until rendered)"
+                <!-- Dynamic Value Update: opens a primed editor page with the three
+                     scenario buttons (100 / 5K / 10K Words) shown on the
+                     editor page itself. Each tap on those buttons times
+                     one Value reassignment on the SAME editor instance. -->
+                <Label Text="Dynamic Value Update (three per-scenario buttons appear on the editor page)"
                        FontSize="13"
                        FontAttributes="Bold"
                        Margin="0,8,0,0" />
@@ -78,9 +70,8 @@
                         Clicked="OnRunDynamicValueClicked"
                         HorizontalOptions="Fill" />
 
-                <!-- Section 3: Apply Format — opens a page with the editor
-                     and a row of basic formatting buttons. Time from button
-                     click to FormatChanged event is measured. -->
+                <!-- Apply Format: opens a page with the editor and a row of
+                     format buttons. Time from click to FormatChanged is measured. -->
                 <Label Text="Apply Format (from click to FormatChanged event)"
                        FontSize="13"
                        FontAttributes="Bold"
@@ -100,9 +91,6 @@
             </VerticalStackLayout>
         </ScrollView>
 
-        <!-- Region 2: results panel. Fixed 240 px height so it never grows
-             into the buttons above it, regardless of how many lines of text
-             the Label contains. -->
         <Border Grid.Row="1"
                 Stroke="LightGray"
                 StrokeThickness="1"

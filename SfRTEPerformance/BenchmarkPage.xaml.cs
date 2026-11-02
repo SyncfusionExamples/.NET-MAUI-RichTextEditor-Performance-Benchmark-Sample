@@ -4,143 +4,133 @@ using System.Text;
 namespace SfRTEPerformance
 {
     /// <summary>
-    /// Main benchmark page. Each button starts one or more timed scenarios
-    /// using <see cref="Stopwatch"/>. Results are appended to the on-screen
+    /// Main benchmark page. Each button starts one timed scenario using
+    /// <see cref="Stopwatch"/>. Results are appended to the on-screen
     /// results section as they are produced.
     /// </summary>
     public partial class BenchmarkPage : ContentPage
     {
-        // Buffer for the on-screen results section. A StringBuilder is kept
-        // around so we don't allocate a new one for every appended line.
+        // Word-count scenarios used by the Initial Load buttons.
+        // The Dynamic Value Update scenario uses the same three sizes; the
+        // three buttons for it live on the editor page itself (visible only
+        // when the editor is opened in Dynamic Value mode), not here.
+        private static readonly int[] WordScenarios = { 100, 5_000, 10_000 };
+
+        // The small document used to seed the editor when it is opened in
+        // Dynamic Value mode. The time to render this priming document is
+        // NOT measured — only the subsequent Value reassignment is.
+        private const int DynamicPrimeWordCount = 100;
+
+        // Buffer for the on-screen results section.
         private readonly StringBuilder _results = new();
 
-        // Inter-measurement pause for the multi-step benchmarks (Dynamic
-        // Value Update). A short delay between iterations makes the
-        // per-iteration timing visible on the editor page banner — without
-        // it the measurements fire back-to-back and the user only sees the
-        // last one. The delay is OUTSIDE the stopwatch window, so it does
-        // not affect the timings.
-        private const int InterMeasurementDelayMs = 1000;
+        // True while this page is the active subscriber to
+        // BenchmarkResultsSink.LinePublished. Toggled in OnDisappearing /
+        // OnAppearing so the subscription is active exactly while an
+        // editor page (which can publish results asynchronously) is on
+        // screen.
+        private bool _resultsSubscribed;
 
         public BenchmarkPage()
         {
             InitializeComponent();
         }
 
-        // -----------------------------------------------------------------
-        // 1. Initial Control Load Benchmark (per-size buttons)
-        // -----------------------------------------------------------------
+        // =================================================================
+        // 1. Initial Load (one button per scenario, including empty)
+        // =================================================================
 
-        // The initial-load buttons all share the same body — they
-        // only differ in which HTML payload is pre-assigned in the editor
-        // page's constructor. The stopwatch is started on the call site
-        // so it captures every nanosecond from "user tapped the button"
-        // up to the editor actually rendering the document.
-        private async void OnRunInitialLoadEmptyClicked(object? sender, EventArgs e)
+        private async void OnRunInitialLoadEmptyClicked(object? sender, EventArgs e) =>
+            await RunInitialLoadEmptyAsync();
+
+        private async void OnRunInitialLoad100Clicked(object? sender, EventArgs e) =>
+            await RunInitialLoadAsync("100 Words", 100);
+
+        private async void OnRunInitialLoad5KClicked(object? sender, EventArgs e) =>
+            await RunInitialLoadAsync("5,000 Words", 5_000);
+
+        private async void OnRunInitialLoad10KClicked(object? sender, EventArgs e) =>
+            await RunInitialLoadAsync("10,000 Words", 10_000);
+
+        // Empty editor: measures the cost of constructing the editor page
+        // with no HTML pre-assigned. There is no marker to poll for, so the
+        // measurement stops at the page construction.
+        private async Task RunInitialLoadEmptyAsync()
         {
-            AppendHeader("Initial Load");
-            await RunInitialLoadAsync(sizeLabel: "Empty");
-        }
+            AppendHeader("Initial Load (Empty)");
 
-        private async void OnRunInitialLoad10KbClicked(object? sender, EventArgs e)
-        {
-            AppendHeader("Initial Load (10 KB)");
-            await RunInitialLoadAsync("10 KB", marker => HtmlGenerator.GenerateSmallDocument(marker));
-        }
-
-        private async void OnRunInitialLoad500KbClicked(object? sender, EventArgs e)
-        {
-            AppendHeader("Initial Load (500 KB)");
-            await RunInitialLoadAsync("500 KB", marker => HtmlGenerator.GenerateLargeDocument(marker));
-        }
-
-        private async void OnRunInitialLoad1MbClicked(object? sender, EventArgs e)
-        {
-            AppendHeader("Initial Load (1 MB)");
-            await RunInitialLoadAsync("1 MB", marker => HtmlGenerator.GenerateExtraLargeDocument(marker));
-        }
-
-        // Shared body for the initial-load buttons. The stopwatch
-        // starts immediately before `new BenchmarkEditorPage(...)` so it
-        // captures the page constructor, the editor construction, the
-        // pre-assignment of the HTML, the layout pass, and the document
-        // parse and render — i.e. the entire "from click to content on
-        // screen" pipeline the spec asks for.
-        //
-        // The stopwatch is stopped by BenchmarkEditorPage once the editor
-        // confirms the document was ingested (see ContentProbe).
-        private async Task RunInitialLoadAsync(string sizeLabel, Func<string, string>? htmlFactory = null)
-        {
-            string? marker = null;
-            string? html = null;
-
-            if (htmlFactory is not null)
-            {
-                // A unique marker per run makes the probe immune to content
-                // that happens to be left over from a previous run.
-                marker = HtmlGenerator.Marker($"{sizeLabel.Replace(" ", string.Empty)}-{Guid.NewGuid():N}");
-                html = htmlFactory(marker);
-            }
-
-            // Start the stopwatch IMMEDIATELY before the constructor so
-            // the measurement includes page construction, editor
-            // construction, the pre-assignment of HTML, the layout
-            // pass, and the WebView document parse and render.
-            var stopwatch = Stopwatch.StartNew();
-
+            var sw = Stopwatch.StartNew();
             var editorPage = new BenchmarkEditorPage(
-                initialLoadStopwatch: stopwatch,
+                bannerMessage: "Initial Load (Empty) - measuring...");
+
+            await Navigation.PushAsync(editorPage);
+            await editorPage.WaitForContentAsync(sw, "Empty");
+        }
+
+        // Builds a BenchmarkEditorPage with the requested document pre-assigned
+        // in the editor, pushes the page onto the navigation stack, and waits
+        // for the editor to confirm it has rendered the document.
+        private async Task RunInitialLoadAsync(string label, int wordCount)
+        {
+            AppendHeader($"Initial Load ({label})");
+
+            // A unique marker per run guarantees the probe matches THIS run's
+            // document, never leftover content from a previous run.
+            string marker = HtmlGenerator.Marker($"{label.Replace(",", "").Replace(" ", "")}-{Guid.NewGuid():N}");
+            string html = HtmlGenerator.GenerateWordsDocument(wordCount, marker);
+
+            // Start the stopwatch immediately before the page is constructed
+            // so it captures page construction, editor construction, the
+            // pre-assignment of HTML, the layout pass, and the document
+            // parse and render — i.e. the entire "click to content on screen"
+            // pipeline.
+            var sw = Stopwatch.StartNew();
+            var editorPage = new BenchmarkEditorPage(
                 initialHtml: html,
                 marker: marker,
-                bannerMessage: $"Initial Load ({sizeLabel}) - measuring...");
+                bannerMessage: $"Initial Load ({label}) - measuring...");
 
-            await RunEditorPageAsync(editorPage, afterReady: null);
+            await Navigation.PushAsync(editorPage);
+            await editorPage.WaitForContentAsync(sw, label);
         }
 
-        // -----------------------------------------------------------------
-        // 2. Dynamic Value Update Benchmark (500 KB, 1 MB)
-        // -----------------------------------------------------------------
+        // =================================================================
+        // 2. Dynamic Value Update (single button on this page; the three
+        //    per-scenario buttons live on the editor page itself).
+        //
+        // Tapping this button opens a freshly-primed editor page in Dynamic
+        // Value mode. The three buttons (100 / 5K / 10K Words) below the
+        // banner on that page let the user measure a single Value
+        // reassignment per tap, on the SAME editor instance. The reported
+        // number is the time for one reassignment, not the time to
+        // construct the editor.
+        // =================================================================
+
         private async void OnRunDynamicValueClicked(object? sender, EventArgs e)
         {
             AppendHeader("Dynamic Value Update");
 
-            // Open ONE editor page, load a small initial document, and then
-            // reassign the Value property twice — once per target size.
-            // This matches the spec: re-measure Value assignment on a control
-            // that has already been loaded.
-            string initialMarker = HtmlGenerator.Marker($"Initial-{Guid.NewGuid():N}");
-            string initialHtml = HtmlGenerator.GenerateSmallDocument(initialMarker);
+            // Seed the editor with a small priming document so the
+            // user sees content immediately. The time to render this
+            // priming document is outside the measurement window — it
+            // happens before any Dynamic button is tapped.
+            string primeMarker = HtmlGenerator.Marker($"Prime-{Guid.NewGuid():N}");
+            string primeHtml = HtmlGenerator.GenerateWordsDocument(
+                DynamicPrimeWordCount, primeMarker);
 
-            var stopwatch = Stopwatch.StartNew();
             var editorPage = new BenchmarkEditorPage(
-                initialLoadStopwatch: stopwatch,
-                initialHtml: initialHtml,
-                marker: initialMarker,
-                bannerMessage: "Measuring value updates...");
+                initialHtml: primeHtml,
+                marker: primeMarker,
+                bannerMessage: "Editor ready. Tap a Word Count button to measure one Value reassignment.",
+                isDynamicValueMode: true);
 
-            // The Value-update measurements each run on the
-            // already-loaded editor. They are only kicked off AFTER the
-            // editor page has signalled it is ready, otherwise the first
-            // assignment runs against a half-constructed control.
-            //
-            // Between each measurement we wait InterMeasurementDelayMs so the
-            // user can see the per-iteration timing on the editor's banner
-            // before the next one fires. The delay is outside the stopwatch
-            // window, so it does not pollute the timings.
-            async Task BodyAsync(BenchmarkEditorPage page)
-            {
-                await MeasureValueUpdateWithPreviewAsync(
-                    page, "500 KB", marker => HtmlGenerator.GenerateLargeDocument(marker));
-                await MeasureValueUpdateWithPreviewAsync(
-                    page, "1 MB", marker => HtmlGenerator.GenerateExtraLargeDocument(marker));
-            }
-
-            await RunEditorPageAsync(editorPage, afterReady: BodyAsync);
+            await Navigation.PushAsync(editorPage);
         }
 
-        // -----------------------------------------------------------------
-        // 3. Large Document Benchmark (10,000 paragraphs)
-        // -----------------------------------------------------------------
+        // =================================================================
+        // 3. 10,000 Paragraphs (unchanged — kept per spec)
+        // =================================================================
+
         private async void OnRunTenKParagraphsClicked(object? sender, EventArgs e)
         {
             AppendHeader("10,000 Paragraphs");
@@ -150,109 +140,30 @@ namespace SfRTEPerformance
             string marker = HtmlGenerator.Marker($"10K-{Guid.NewGuid():N}");
             string html = HtmlGenerator.GenerateParagraphsDocument(10_000, marker);
 
-            var stopwatch = Stopwatch.StartNew();
-
+            var sw = Stopwatch.StartNew();
             var editorPage = new BenchmarkEditorPage(
-                initialLoadStopwatch: stopwatch,
                 initialHtml: html,
                 marker: marker,
                 bannerMessage: "Measuring 10,000 paragraph load...");
 
-            await RunEditorPageAsync(editorPage, afterReady: null);
+            await Navigation.PushAsync(editorPage);
+            await editorPage.WaitForContentAsync(sw, "10,000 Paragraphs");
         }
 
-        // -----------------------------------------------------------------
-        // 4. Apply Format Benchmark
-        // -----------------------------------------------------------------
-        // Pushes the BenchmarkFormatPage, which has the SfRichTextEditor
-        // and a row of basic formatting buttons (Bold, Italic, Underline,
-        // Strikethrough, Bullets, Numbers, Left, Center, Right, Justify).
-        // The page itself owns the timing — each format button starts a
-        // Stopwatch before calling into the editor and stops it in the
-        // FormatChanged event handler. Timing lines are pushed back here
-        // through the shared results sink.
+        // =================================================================
+        // 4. Apply Format
+        // =================================================================
+
         private async void OnRunApplyFormatClicked(object? sender, EventArgs e)
         {
             AppendHeader("Apply Format");
 
-            var formatPage = new BenchmarkFormatPage();
-
-            BenchmarkResultsSink.LinePublished += OnBenchmarkLinePublished;
-            try
-            {
-                await Navigation.PushAsync(formatPage);
-
-                // We do not auto-pop. The user stays on the format page
-                // so they can apply multiple formats in a row, then
-                // navigates back via the Back button.
-            }
-            finally
-            {
-                BenchmarkResultsSink.LinePublished -= OnBenchmarkLinePublished;
-            }
+            await Navigation.PushAsync(new BenchmarkFormatPage());
         }
 
-        // -----------------------------------------------------------------
-        // Helpers
-        // -----------------------------------------------------------------
-
-        // Pushes the editor page, waits for it to fully appear, then
-        // optionally runs the supplied body of measurements against the
-        // editor. The editor page STAYS on screen after the measurement
-        // runs — the user navigates back to this page themselves (via
-        // the device's back gesture or the Back button on the editor
-        // page). Auto-popping the page after every benchmark confused
-        // users, so it was removed.
-        //
-        // The "wait for ready" step is the critical piece: it guarantees
-        // that any Value-update measurements run against a fully
-        // constructed and laid-out SfRichTextEditor, not a half-built one.
-        private async Task RunEditorPageAsync(
-            BenchmarkEditorPage editorPage,
-            Func<BenchmarkEditorPage, Task>? afterReady)
-        {
-            // Subscribe so the editor page can push its result line back here.
-            BenchmarkResultsSink.LinePublished += OnBenchmarkLinePublished;
-
-            // Set up the ready signal BEFORE pushing the page so we never
-            // miss the event if it fires immediately after push.
-            var readyTcs = new TaskCompletionSource<bool>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
-            void OnReady()
-            {
-                readyTcs.TrySetResult(true);
-            }
-            BenchmarkResultsSink.EditorReady += OnReady;
-
-            try
-            {
-                await Navigation.PushAsync(editorPage);
-
-                // Wait for the editor to confirm it has ingested the
-                // document. This is the real end of the initial-load
-                // measurement — not the control's Loaded event.
-                await editorPage.MeasureInitialLoadAsync();
-
-                // Wait for the editor page to finish its first OnAppearing.
-                await readyTcs.Task;
-
-                // Run the per-scenario measurement body, if any.
-                if (afterReady != null)
-                {
-                    await afterReady(editorPage);
-                }
-
-                // NOTE: we intentionally do NOT pop the editor page here.
-                // The user stays on the editor page so they can inspect
-                // the content, and navigates back via the back gesture or
-                // the Back button on the editor page.
-            }
-            finally
-            {
-                BenchmarkResultsSink.EditorReady -= OnReady;
-                BenchmarkResultsSink.LinePublished -= OnBenchmarkLinePublished;
-            }
-        }
+        // =================================================================
+        // Result helpers
+        // =================================================================
 
         private void OnClearResultsClicked(object? sender, EventArgs e)
         {
@@ -260,47 +171,41 @@ namespace SfRTEPerformance
             ResultsLabel.Text = "Results cleared.";
         }
 
-        // Runs a single Value-update measurement with a "preview" banner
-        // and a short inter-measurement pause so the user can see each
-        // timing as the benchmark progresses. Without the pause the
-        // measurements fire back-to-back and only the last one remains
-        // visible on the editor's banner.
-        //
-        // The pause is OUTSIDE the stopwatch window, so it does not
-        // affect the reported timings.
-        private static async Task MeasureValueUpdateWithPreviewAsync(
-            BenchmarkEditorPage page, string sizeLabel, Func<string, string> htmlFactory)
+        private void OnBenchmarkLinePublished(string line) => AppendLine(line);
+
+        // The benchmark results sink is a static event. The editor page
+        // (or format page) publishes to it whenever it completes a
+        // measurement. This page must be subscribed for the entire window
+        // in which an editor / format page is on screen — including the
+        // Dynamic Value Update buttons on the editor page, which publish
+        // results asynchronously (long after this page's click handler
+        // has returned). Tying the subscription to OnDisappearing /
+        // OnAppearing is the simplest way to get that window exactly
+        // right.
+        protected override void OnAppearing()
         {
-            // Show what is about to run, so the user has a clear
-            // "next" indicator on the banner.
-            page.ShowPreview($"Running {sizeLabel}...");
-
-            // Small delay so the preview is actually visible before
-            // the editor starts churning on the next Value assignment.
-            await Task.Delay(InterMeasurementDelayMs / 2);
-
-            // The actual measurement — this is what the benchmark
-            // reports. The Stopwatch is started and stopped inside
-            // MeasureValueUpdateAsync, so the preview delay above is not
-            // included in the timing.
-            //
-            // A fresh marker per iteration guarantees the probe detects
-            // THIS assignment and not leftover content from the previous
-            // one.
-            string marker = HtmlGenerator.Marker($"{sizeLabel}-{Guid.NewGuid():N}");
-            string html = htmlFactory(marker);
-            await page.MeasureValueUpdateAsync(sizeLabel, html, marker);
-
-            // Pause again so the user can read the timing before the
-            // next iteration's preview overwrites it.
-            await Task.Delay(InterMeasurementDelayMs);
+            base.OnAppearing();
+            UnsubscribeFromResults();
         }
 
-        // Receives a benchmark result line from the editor page and appends
-        // it to the on-screen results section.
-        private void OnBenchmarkLinePublished(string line)
+        protected override void OnDisappearing()
         {
-            AppendLine(line);
+            SubscribeToResults();
+            base.OnDisappearing();
+        }
+
+        private void SubscribeToResults()
+        {
+            if (_resultsSubscribed) return;
+            BenchmarkResultsSink.LinePublished += OnBenchmarkLinePublished;
+            _resultsSubscribed = true;
+        }
+
+        private void UnsubscribeFromResults()
+        {
+            if (!_resultsSubscribed) return;
+            BenchmarkResultsSink.LinePublished -= OnBenchmarkLinePublished;
+            _resultsSubscribed = false;
         }
 
         private void AppendHeader(string header)

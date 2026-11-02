@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using Syncfusion.Licensing;
+//using Syncfusion.Licensing;
 
 namespace SfRTEPerformance
 {
@@ -8,7 +8,7 @@ namespace SfRTEPerformance
         public App()
         {
             InitializeComponent();
-            SyncfusionLicenseProvider.RegisterLicense("YOUR LICENSE KEY");
+            //SyncfusionLicenseProvider.RegisterLicense("YOUR LICENSE KEY");
         }
 
         protected override Window CreateWindow(IActivationState? activationState)

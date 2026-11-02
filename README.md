@@ -14,12 +14,18 @@ characteristics of `SfRichTextEditor`:
 1. **Initial Load** — how long it takes, from the moment the user taps
    a button, to construct an editor page, instantiate the
    `SfRichTextEditor`, assign the chosen HTML payload to its `Value`
-   property, lay it out, navigate to the page, and produce the first
-   paint. Measured per size (empty / 10 KB / 500 KB / 1 MB)
-   because the time depends on the document size.
+   property, lay it out, navigate to the page, and have the editor
+   render its first text. Measured per scenario (empty / 100 / 5,000 /
+   10,000 words) because the time depends on the document size.
 2. **Dynamic Value Update** — how long it takes to assign a new HTML
-   payload to the `Value` property of an already-loaded editor, across
-   four document sizes (500 KB, 1 MB).
+   payload to the `Value` property of an already-loaded editor and have
+   it render its first text. The benchmark page has a single "Run
+   Dynamic Value Update" button; tapping it opens a freshly-primed
+   editor page that exposes three per-scenario buttons (100 / 5,000 /
+   10,000 words). Each tap on those buttons times one Value
+   reassignment on the SAME editor instance. The reported number
+   excludes the editor's initial-load time so it reflects only the
+   reassignment itself.
 3. **Large Document Load** — how long it takes to load a 10,000-paragraph
    HTML document.
 
@@ -33,34 +39,100 @@ different devices.
 
 | Benchmark | Description | Document Sizes |
 |-----------|-------------|----------------|
-| Initial Load (per-size buttons) | From click to first paint, with the HTML pre-assigned in the editor page's constructor | Empty, 10 KB, 500 KB, 1 MB |
-| Dynamic Value Update | Reassign `Value` on a loaded editor | 500 KB, 1 MB |
+| Initial Load (per-scenario buttons on the benchmark page) | From click to the editor's first text being rendered, with the HTML pre-assigned in the editor page's constructor | Empty, 100 / 5,000 / 10,000 words |
+| Dynamic Value Update (three buttons on the editor page) | Reassign `Value` once on an already-loaded editor; only the reassignment time is measured | 100 / 5,000 / 10,000 words |
 | 10,000 Paragraphs | Assign a large document to `Value` | 10,000 `<p>` elements |
 
 ## How the Timing Values Are Measured
 
 All measurements use `System.Diagnostics.Stopwatch`.
 
-* **Initial Load (per-size buttons)** — the stopwatch starts on
-  `BenchmarkPage` **immediately before the `BenchmarkEditorPage`
-  constructor** runs. The page's constructor itself assigns the chosen
-  HTML to `richTextEditor.Value` *before* the page is added to the
-  visual tree. The stopwatch then stops in
-  `SfRichTextEditor.Loaded` event. The elapsed time therefore
-  captures the entire "from click to control rendering" pipeline:
-  page construction, `SfRichTextEditor` construction, the
-  pre-assignment of HTML, the layout pass, the navigation animation,
-  and the first paint.
+### The measurement endpoint: "content acknowledged", not "control loaded"
 
-* **Dynamic Value Update** — the stopwatch starts immediately before
-  `richTextEditor.Value = html;` and stops immediately after the
-  assignment. The editor is already on screen; the assignment is the
-  only thing being measured.
+This is the single most important detail in the sample, and it is the
+reason the measurement is trustworthy.
 
-* **10,000 Paragraphs** — the stopwatch starts immediately before
-  `richTextEditor.Value = html;` and stops immediately after the
-  assignment. The HTML is generated once, up front, so HTML generation
-  is **not** included in the measurement.
+`SfRichTextEditor.Loaded` **cannot** be used as the end of a load
+measurement. The control is a `WebView` that hosts a ProseMirror
+document, so `Loaded` fires when the MAUI visual tree attaches the
+control — long before any content exists in the editor. The real
+pipeline is:
+
+```
+  click
+    │
+    ├─ page + control construction          (synchronous)
+    ├─ control attached to the visual tree   ──► Loaded fires HERE
+    │                                          (editor still EMPTY)
+    ├─ WebView loads its HTML shell          (async)
+    ├─ JS bridge wired, initialize() runs    (async)
+    ├─ HTML payload parsed into the document (async)  ◄─ the expensive part
+    └─ document mounted and painted          (async)
+    │
+  content actually on screen
+```
+
+Stopping the stopwatch at `Loaded` therefore measures only steps 1–2 and
+reports a number that has nothing to do with how long the content took
+to load. This is exactly the problem the sample was written to fix.
+
+### How the endpoint is detected
+
+The sample detects the real endpoint using **only the control's public
+API**:
+
+1. A unique plain-text marker (e.g. `BENCHMARK-MARKER-1000Words-<guid>`)
+   is embedded in the document that gets assigned.
+2. The editor's live document text is polled through the public
+   `SfRichTextEditor.GetText()` method, which reads the document back
+   out of the WebView through the JavaScript bridge.
+3. The stopwatch is stopped the instant the marker is observed in that
+   text.
+
+When the marker shows up in `GetText()`, the editor has begun rendering
+text — so the measurement covers the whole pipeline above, including the
+parse and render of the first text the user actually sees.
+
+The marker is placed in its own paragraph at the very **start** of the
+generated document on purpose. Observing the marker therefore measures
+the time to the **first text rendered**, not the time to the whole
+document being committed. This is the user-perceived time.
+
+`ContentProbe` implements this. Two details keep the probe honest:
+
+* **Unique marker per run.** The marker contains a GUID, so the probe can
+  never match leftover content from a previous run instead of the
+  document that was just assigned.
+* **Fixed poll interval.** Reading a large document back through the
+  WebView bridge is itself slow. A short fixed interval (50 ms) keeps
+  the endpoint pinned down accurately without dominating the
+  measurement.
+
+### The other scenarios
+
+* **Dynamic Value Update** — the benchmark page has one "Run Dynamic
+  Value Update" button. Tapping it pushes a fresh editor page
+  pre-loaded with a small (100-word) priming document and opens it in
+  Dynamic Value mode (the three per-scenario buttons become visible on
+  the editor page itself, below the result banner). The user then taps
+  one of those buttons — `100 Words`, `5,000 Words`, or `10,000 Words`
+  — to reassign `Value` on the SAME editor instance. The stopwatch
+  starts immediately before the assignment and stops when the new
+  document's marker is observed in `GetText()`. The reported number is
+  therefore the time for the single reassignment, not the time to
+  construct the editor. Note that the assignment itself only *enqueues*
+  the payload for the WebView; stopping at the end of the assignment
+  would report the cost of an enqueue, not a load.
+* **10,000 Paragraphs** — the same marker mechanism, with the HTML
+  generated once up front so that HTML generation is **not** included in
+  the measurement.
+* **Apply Format** — measured from the format-button click to the
+  `FormatChanged` event. This path is genuinely synchronous inside the
+  control, so the event is a valid endpoint here.
+
+Timings are reported with two decimal places. `Stopwatch.ElapsedMilliseconds`
+is a `long` that truncates, which would render a fast operation as a
+misleading "0 ms".
 
 ## How to Run the Sample
 
@@ -79,8 +151,8 @@ All measurements use `System.Diagnostics.Stopwatch`.
    runs against it, and the editor page **stays on screen** so you can
    inspect the loaded content. Results are appended to the on-screen
    results section on the benchmark page in real time. Use the
-   **Back to Benchmarks** button (or your device's back gesture) to
-   return to the benchmark page.
+   **Back** button on the editor page (or your device's back gesture)
+   to return to the benchmark page.
 
 ### Running from the command line
 
@@ -90,16 +162,33 @@ dotnet build SfRTEPerformance/SfRTEPerformance.csproj -t:Run -f net10.0-windows1
 
 Replace the target framework with the one you want to run.
 
+### Verifying the measurement logic
+
+The probe's marker logic and the word-count generator's sizing are
+covered by a standalone harness that needs neither MAUI nor a device:
+
+```powershell
+dotnet run --project tools/selftest/SelfTest.csproj
+```
+
+It asserts that the millisecond formatter keeps sub-millisecond precision,
+that the marker survives the HTML-to-text projection intact in both
+generators, that markers are unique per run, and that the word-count
+generator produces the requested number of words.
+
 ### UX details
 
 * Tapping any benchmark button pushes the editor page, runs the
   measurement, and leaves the editor page on screen. The benchmark
   page never auto-pops, so you can review the editor's content.
-* For the **Dynamic Value Update** buttons,
-  the benchmark waits for the editor page to finish its first
-  `OnAppearing` before measuring any `Value` assignment. This avoids
-  measuring against a half-constructed control, which would otherwise
-  produce bogus "0 ms" timings on the first assignment.
+* For **Dynamic Value Update**, the benchmark page has one button that
+  opens a primed editor page; the three per-scenario buttons then live
+  on the editor page itself, below the result banner. Tap them in any
+  order to measure a Value reassignment for the matching word count on
+  the same loaded editor.
+* The three Dynamic Value buttons on the editor page are hidden for
+  Initial Load scenarios — they only appear when the editor was opened
+  in Dynamic Value mode.
 * The **Clear Results** button resets the on-screen results section.
 * The results panel is fixed at 240 px tall and the buttons live in a
   scroll region above it, so the two never visually overlap.
@@ -117,37 +206,63 @@ Replace the target framework with the one you want to run.
 SfRTEPerformance/
 ├── BenchmarkPage.xaml / .xaml.cs        Main benchmark UI (buttons + results)
 ├── BenchmarkEditorPage.xaml / .xaml.cs  Editor host page that is timed
+├── BenchmarkFormatPage.xaml / .xaml.cs  Page for the Apply Format benchmark
+├── ContentProbe.cs                      Polls the editor until the assigned
+│                                        document's marker is visible (the
+│                                        measurement endpoint)
+├── BenchmarkFormat.cs                   Shared millisecond formatting
 ├── HtmlGenerator.cs                     Helpers that build the test HTML
+│                                        (words and paragraphs)
 ├── BenchmarkResultsSink.cs              Tiny static sink so the editor
 │                                        page can push result lines back
 │                                        to the benchmark page
 ├── App.xaml / App.xaml.cs
-├── AppShell.xaml / .xaml.cs             Shell that points to BenchmarkPage
+├── AppShell.xaml / AppShell.xaml.cs     Shell that points to BenchmarkPage
 ├── MauiProgram.cs                       Registers the Syncfusion Core
 │                                        handler via ConfigureSyncfusionCore()
 └── SfRTEPerformance.csproj              NuGet refs (incl.
                                          Syncfusion.Maui.RichTextEditor)
-```
 
+tools/
+├── selftest/                            Standalone harness that verifies the
+│                                        marker's survival and the
+│                                        word-count generator's sizing
+└── (analysis helpers used while designing the probe)
+```
 ## Example Output
 
 ```
 ======================================
-Initial Load (500 KB)
+Initial Load (Empty)
 ======================================
-Initial Load (500 KB): 210 ms
+Empty: 12.40 ms
+
+======================================
+Initial Load (100 Words)
+======================================
+100 Words: 35.20 ms
+
+======================================
+Initial Load (5,000 Words)
+======================================
+5,000 Words: 210.44 ms
 
 ======================================
 Dynamic Value Update
 ======================================
-500 KB Value Update: 180 ms
-1 MB Value Update: 420 ms
+100 Words Value Update: 8.10 ms
+5,000 Words Value Update: 180.22 ms
+10,000 Words Value Update: 420.91 ms
 
 ======================================
 10,000 Paragraphs
 ======================================
-10,000 Paragraph Document Load: 2450 ms
+10,000 Paragraphs: 2450.63 ms
 ```
+
+The Dynamic Value Update section shows three measurements: one per tap on
+the corresponding button (100 Words, 5,000 Words, 10,000 Words) on the
+editor page, all on the same loaded editor instance.
 
 ## Notes for an Honest Comparison
 
@@ -160,3 +275,7 @@ Dynamic Value Update
 * Run each scenario more than once and use the median. The first run
   after a cold start is usually slower because of disk and runtime
   warm-up.
+* The probe's read-back polls the editor, so it adds a small amount of
+  overhead to every measurement. The overhead is bounded by the fixed
+  poll interval (50 ms) and is small relative to the load times being
+  measured, so it does not distort the comparison between scenarios.

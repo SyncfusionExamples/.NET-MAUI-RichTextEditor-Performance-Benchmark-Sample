@@ -1,5 +1,3 @@
-using System.Collections.ObjectModel;
-
 namespace SfRTEPerformance
 {
     /// <summary>
@@ -16,18 +14,6 @@ namespace SfRTEPerformance
         public static void Publish(string line)
         {
             LinePublished?.Invoke(line);
-        }
-
-        /// <summary>
-        /// Fired by the <see cref="BenchmarkEditorPage"/> when its
-        /// <c>OnAppearing</c> has finished — i.e. the SfRichTextEditor is
-        /// fully constructed, laid out, and ready to accept Value updates.
-        /// </summary>
-        public static event Action? EditorReady;
-
-        public static void SignalReady()
-        {
-            EditorReady?.Invoke();
         }
     }
 }

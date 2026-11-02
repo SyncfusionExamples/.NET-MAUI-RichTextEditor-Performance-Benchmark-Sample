@@ -5,9 +5,11 @@
              x:Class="SfRTEPerformance.BenchmarkEditorPage"
              Title="SfRichTextEditor">
 
-    <Grid RowDefinitions="Auto,*,Auto" Padding="10">
+    <Grid RowDefinitions="Auto,Auto,*" Padding="10">
 
-        <!-- Result banner shown at the top of the editor page -->
+        <!-- Result banner shown at the top of the editor page. Updated by
+             the benchmark with the measured time once the editor has ingested
+             the assigned document. -->
         <Label x:Name="ResultLabel"
                Grid.Row="0"
                Padding="16,12"
@@ -16,23 +18,31 @@
                BackgroundColor="#512BD4"
                LineBreakMode="WordWrap" />
 
-        <!-- The SfRichTextEditor under measurement. Toolbar is hidden so it
-             does not skew the initial-load measurement. -->
+        <!-- Dynamic Value Update buttons. Visible only when the editor was
+             opened in Dynamic Value mode (one button per scenario, all
+             measuring a Value reassignment on the SAME editor instance).
+             Hidden for Initial Load scenarios. -->
+        <HorizontalStackLayout x:Name="DynamicButtonRow"
+                               Grid.Row="1"
+                               IsVisible="False"
+                               Spacing="6"
+                               Margin="0,8,0,8"
+                               HorizontalOptions="Start">
+            <Button x:Name="DynamicValue100Button"
+                    Text="100 Words"
+                    Clicked="OnDynamicValue100Clicked" />
+            <Button x:Name="DynamicValue5KButton"
+                    Text="5,000 Words"
+                    Clicked="OnDynamicValue5KClicked" />
+            <Button x:Name="DynamicValue10KButton"
+                    Text="10,000 Words"
+                    Clicked="OnDynamicValue10KClicked" />
+        </HorizontalStackLayout>
+
+        <!-- The SfRichTextEditor under measurement. -->
         <rte:SfRichTextEditor x:Name="richTextEditor"
-                              Grid.Row="1"
-                              ShowToolbar="True"
-                              Placeholder="Editor under benchmark..."
-                              Loaded="richTextEditor_Loaded"
+                              Grid.Row="2"
                               VerticalOptions="Fill"
                               HorizontalOptions="Fill" />
-
-        <!-- Explicit Back button so the user has a clear way to return to
-             the benchmark page on every platform. The hardware / gesture
-             back button works too, but a visible button is friendlier. -->
-        <Button Grid.Row="2" IsVisible="False"
-                Text="Back to Benchmarks"
-                Clicked="OnBackClicked"
-                HorizontalOptions="Fill"
-                Margin="0" />
     </Grid>
 </ContentPage>
