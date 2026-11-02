@@ -113,7 +113,7 @@ document being committed. This is the user-perceived time.
   pre-loaded with a small (100-word) priming document and opens it in
   Dynamic Value mode (the three per-scenario buttons become visible on
   the editor page itself, below the result banner). The user then taps
-  one of those buttons — `100 Words`, `5,000 Words`, or `10,000 Words`
+  one of those buttons — `1000 Words`, `5,000 Words`, or `10,000 Words`
   — to reassign `Value` on the SAME editor instance. The stopwatch
   starts immediately before the assignment and stops when the new
   document's marker is observed in `GetText()`. The reported number is
@@ -156,20 +156,6 @@ dotnet build SfRTEPerformance/SfRTEPerformance.csproj -t:Run -f net10.0-windows1
 ```
 
 Replace the target framework with the one you want to run.
-
-### Verifying the measurement logic
-
-The probe's marker logic and the word-count generator's sizing are
-covered by a standalone harness that needs neither MAUI nor a device:
-
-```powershell
-dotnet run --project tools/selftest/SelfTest.csproj
-```
-
-It asserts that the millisecond formatter keeps sub-millisecond precision,
-that the marker survives the HTML-to-text projection intact, that
-markers are unique per run, and that the word-count generator produces
-the requested number of words.
 
 ### UX details
 
@@ -224,11 +210,6 @@ SfRTEPerformance/
 │                                        handler via ConfigureSyncfusionCore()
 └── SfRTEPerformance.csproj              NuGet refs (incl.
                                          Syncfusion.Maui.RichTextEditor)
-
-tools/
-└── selftest/                            Standalone harness that verifies the
-                                         marker's survival and the
-                                         word-count generator's sizing
 ```
 ## Example Output
 
@@ -251,7 +232,7 @@ Initial Load (5,000 Words)
 ======================================
 Dynamic Value Update
 ======================================
-100 Words Value Update: 8.10 ms
+1000 Words Value Update: 8.10 ms
 5,000 Words Value Update: 180.22 ms
 10,000 Words Value Update: 420.91 ms
 
