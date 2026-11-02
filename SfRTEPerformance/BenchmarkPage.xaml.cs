@@ -14,7 +14,7 @@ namespace SfRTEPerformance
         // The Dynamic Value Update scenario uses the same three sizes; the
         // three buttons for it live on the editor page itself (visible only
         // when the editor is opened in Dynamic Value mode), not here.
-        private static readonly int[] WordScenarios = { 100, 5_000, 10_000 };
+        private static readonly int[] WordScenarios = { 1000, 5_000, 10_000 };
 
         // The small document used to seed the editor when it is opened in
         // Dynamic Value mode. The time to render this priming document is
@@ -43,8 +43,8 @@ namespace SfRTEPerformance
         private async void OnRunInitialLoadEmptyClicked(object? sender, EventArgs e) =>
             await RunInitialLoadEmptyAsync();
 
-        private async void OnRunInitialLoad100Clicked(object? sender, EventArgs e) =>
-            await RunInitialLoadAsync("100 Words", 100);
+        private async void OnRunInitialLoad1000Clicked(object? sender, EventArgs e) =>
+            await RunInitialLoadAsync("1000 Words", 1000);
 
         private async void OnRunInitialLoad5KClicked(object? sender, EventArgs e) =>
             await RunInitialLoadAsync("5,000 Words", 5_000);
@@ -99,7 +99,7 @@ namespace SfRTEPerformance
         //    per-scenario buttons live on the editor page itself).
         //
         // Tapping this button opens a freshly-primed editor page in Dynamic
-        // Value mode. The three buttons (100 / 5K / 10K Words) below the
+        // Value mode. The three buttons (1000 / 5K / 10K Words) below the
         // banner on that page let the user measure a single Value
         // reassignment per tap, on the SAME editor instance. The reported
         // number is the time for one reassignment, not the time to
@@ -128,30 +128,7 @@ namespace SfRTEPerformance
         }
 
         // =================================================================
-        // 3. 10,000 Paragraphs (unchanged — kept per spec)
-        // =================================================================
-
-        private async void OnRunTenKParagraphsClicked(object? sender, EventArgs e)
-        {
-            AppendHeader("10,000 Paragraphs");
-
-            // Generate the 10,000 paragraph HTML once (we time only the
-            // editor load, not HTML generation, which is constant per run).
-            string marker = HtmlGenerator.Marker($"10K-{Guid.NewGuid():N}");
-            string html = HtmlGenerator.GenerateParagraphsDocument(10_000, marker);
-
-            var sw = Stopwatch.StartNew();
-            var editorPage = new BenchmarkEditorPage(
-                initialHtml: html,
-                marker: marker,
-                bannerMessage: "Measuring 10,000 paragraph load...");
-
-            await Navigation.PushAsync(editorPage);
-            await editorPage.WaitForContentAsync(sw, "10,000 Paragraphs");
-        }
-
-        // =================================================================
-        // 4. Apply Format
+        // 3. Apply Format
         // =================================================================
 
         private async void OnRunApplyFormatClicked(object? sender, EventArgs e)

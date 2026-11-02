@@ -36,9 +36,9 @@
                         Clicked="OnRunInitialLoadEmptyClicked"
                         HorizontalOptions="Fill" />
 
-                <Button x:Name="InitialLoad100Button"
-                        Text="Run Initial Load (100 Words)"
-                        Clicked="OnRunInitialLoad100Clicked"
+                <Button x:Name="InitialLoad1000Button"
+                        Text="Run Initial Load (1000 Words)"
+                        Clicked="OnRunInitialLoad1000Clicked"
                         HorizontalOptions="Fill" />
 
                 <Button x:Name="InitialLoad5KButton"
@@ -49,11 +49,6 @@
                 <Button x:Name="InitialLoad10KButton"
                         Text="Run Initial Load (10,000 Words)"
                         Clicked="OnRunInitialLoad10KClicked"
-                        HorizontalOptions="Fill" />
-
-                <Button x:Name="TenKParagraphsButton"
-                        Text="Run 10,000 Paragraph Benchmark"
-                        Clicked="OnRunTenKParagraphsClicked"
                         HorizontalOptions="Fill" />
 
                 <!-- Dynamic Value Update: opens a primed editor page with the three
