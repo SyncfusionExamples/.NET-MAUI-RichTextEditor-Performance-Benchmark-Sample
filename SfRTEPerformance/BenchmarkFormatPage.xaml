@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:rte="clr-namespace:Syncfusion.Maui.RichTextEditor;assembly=Syncfusion.Maui.RichTextEditor"
+             x:Class="SfRTEPerformance.BenchmarkFormatPage"
+             Title="Format Benchmark">
+
+    <!--
+        Layout (top to bottom):
+          Row 0  : result banner (the elapsed-time line)
+          Row 1  : editor (with a short seeded paragraph for the user to select)
+          Row 2  : row of character-format buttons (Bold / Italic / Underline / Strike)
+          Row 3  : row of paragraph-format buttons (Bullets / Numbers / Left / Center / Right / Justify)
+          Row 4  : Load Large Doc button (assigns a large HTML document to the editor)
+          Row 5  : Back to Benchmarks button
+    -->
+    <Grid Padding="10"
+          RowSpacing="8"
+          RowDefinitions="Auto,Auto,*,Auto,Auto">
+
+        <!-- Result banner — shows the most recent measured time. -->
+        <Label x:Name="ResultLabel"
+               Grid.Row="0"
+               Padding="16,12"
+               FontSize="14"
+               TextColor="White"
+               BackgroundColor="#512BD4"
+               LineBreakMode="WordWrap"
+               Text="Select text in the editor (or use Ctrl/Cmd+A) then tap a format button. The time from tap to FormatChanged is measured." />
+
+        <!-- The SfRichTextEditor. Toolbar is hidden — the user is meant
+             to use the custom buttons below so the formatting is exactly
+             what the benchmark measures. -->
+        <rte:SfRichTextEditor x:Name="richTextEditor"
+                              Grid.Row="2"
+                              ShowToolbar="False"
+                              FormatChanged="OnFormatChanged"
+                              VerticalOptions="Fill"
+                              HorizontalOptions="Fill" />
+
+        <!-- Character-format buttons. Each click is timed from "click
+             handler entered" to "FormatChanged event fired". -->
+        <Grid Grid.Row="1"
+              ColumnDefinitions="*,*,*,*"
+              ColumnSpacing="6">
+            <Button Grid.Column="0"
+                    Text="Bold"
+                    FontAttributes="Bold"
+                    Clicked="OnBoldClicked" />
+            <Button Grid.Column="1"
+                    Text="Italic"
+                    FontAttributes="Italic"
+                    Clicked="OnItalicClicked" />
+            <Button Grid.Column="2"
+                    Text="Underline"
+                    Clicked="OnUnderlineClicked" />
+            <Button Grid.Column="3"
+                    Text="Strike"
+                    Clicked="OnStrikethroughClicked" />
+        </Grid>
+
+        <!-- Load Large Doc �� assigns a sizeable HTML document (10,000
+             paragraphs) to the editor so the user can then apply
+             formatting on a realistically-sized body. The assignment
+             itself is timed and reported through the shared sink. -->
+        <Button Grid.Row="3"
+                x:Name="LoadLargeDocButton"
+                Text="Load Large Doc"
+                Clicked="OnLoadLargeDocClicked"
+                HorizontalOptions="Fill" />
+
+        <!-- Back to Benchmarks button. -->
+        <Button Grid.Row="4"
+                Text="Back to Benchmarks"
+                Clicked="OnBackClicked"
+                HorizontalOptions="Fill" />
+    </Grid>
+</ContentPage>
