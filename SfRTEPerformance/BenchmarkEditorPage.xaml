@@ -29,7 +29,7 @@
         <!-- Explicit Back button so the user has a clear way to return to
              the benchmark page on every platform. The hardware / gesture
              back button works too, but a visible button is friendlier. -->
-        <Button Grid.Row="2"
+        <Button Grid.Row="2" IsVisible="False"
                 Text="Back to Benchmarks"
                 Clicked="OnBackClicked"
                 HorizontalOptions="Fill"

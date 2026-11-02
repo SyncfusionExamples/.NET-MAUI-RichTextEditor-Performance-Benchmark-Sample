@@ -31,9 +31,11 @@
 
                 <!-- Section 1: Initial Load — click a button, the editor
                      page is constructed with the matching HTML pre-assigned
-                     in the constructor, and the time from click to first
-                     paint is measured. -->
-                <Label Text="Initial Load (HTML pre-assigned in constructor)"
+                     in the constructor. The clock runs from the click until
+                     the editor confirms it has ingested the document —
+                     not until the control raises Loaded, which happens long
+                     before the text is rendered. -->
+                <Label Text="Initial Load (measured until the content is actually rendered)"
                        FontSize="13"
                        FontAttributes="Bold"
                        Margin="0,8,0,0" />
@@ -66,7 +68,7 @@
                 <!-- Section 2: Dynamic Value Update — re-assigns the
                      Value property on an already-loaded editor four
                      times (10 KB, 100 KB, 500 KB, 1 MB). -->
-                <Label Text="Dynamic Value Update (re-assign Value on a loaded editor)"
+                <Label Text="Dynamic Value Update (re-assign Value, measured until rendered)"
                        FontSize="13"
                        FontAttributes="Bold"
                        Margin="0,8,0,0" />

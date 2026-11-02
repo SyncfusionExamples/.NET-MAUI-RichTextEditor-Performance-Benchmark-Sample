@@ -85,7 +85,7 @@ namespace SfRTEPerformance
         // during the load are ignored (the load is not a format button
         // click).
         // -----------------------------------------------------------------
-        private void OnLoadLargeDocClicked(object? sender, EventArgs e)
+        private async void OnLoadLargeDocClicked(object? sender, EventArgs e)
         {
             // Make sure no stale format measurement is in flight. The
             // load below may raise FormatChanged internally; we do not
@@ -96,13 +96,24 @@ namespace SfRTEPerformance
             // Build a sizeable HTML document: 1,000 paragraphs of plain
             // text. Big enough to exercise the editor's layout path, but
             // not so large that the page becomes unresponsive.
-            string html = HtmlGenerator.GenerateParagraphsDocument(1_000);
+            //
+            // The timing stops when the editor acknowledges the new
+            // document (see ContentProbe), not when the assignment
+            // returns, because the assignment only enqueues the payload
+            // for the WebView.
+            string marker = HtmlGenerator.Marker($"1K-{Guid.NewGuid():N}");
+            string html = HtmlGenerator.GenerateParagraphsDocument(1_000, marker);
 
             var sw = Stopwatch.StartNew();
             richTextEditor.Value = html;
-            sw.Stop();
 
-            string line = $"Load Large Doc (1,000 paragraphs): {sw.ElapsedMilliseconds} ms";
+            bool acknowledged = await ContentProbe.WaitForContentAsync(
+                richTextEditor, marker, sw, html.Length);
+
+            string line = acknowledged
+                ? $"Load Large Doc (1,000 paragraphs): {BenchmarkFormat.Milliseconds(sw)} ms"
+                : $"Load Large Doc (1,000 paragraphs): timed out after {BenchmarkFormat.Milliseconds(ContentProbe.Timeout / 1000)} s";
+
             ResultLabel.Text = line;
             BenchmarkResultsSink.Publish(line);
         }
@@ -243,8 +254,7 @@ namespace SfRTEPerformance
         // produce.
         private static string FormatElapsed(Stopwatch sw)
         {
-            double ms = sw.ElapsedTicks * 1000.0 / Stopwatch.Frequency;
-            return ms.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+            return BenchmarkFormat.Milliseconds(sw);
         }
 
         // -----------------------------------------------------------------

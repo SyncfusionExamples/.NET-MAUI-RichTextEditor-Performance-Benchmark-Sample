@@ -15,11 +15,11 @@ namespace SfRTEPerformance
         private readonly StringBuilder _results = new();
 
         // Inter-measurement pause for the multi-step benchmarks (Dynamic
-        // Value Update, Run All). A short delay between iterations
-        // makes the per-iteration timing visible on the editor page
-        // banner — without it the four measurements fire back-to-back
-        // and the user only sees the last one. The delay is OUTSIDE
-        // the stopwatch window, so it does not affect the timings.
+        // Value Update). A short delay between iterations makes the
+        // per-iteration timing visible on the editor page banner — without
+        // it the measurements fire back-to-back and the user only sees the
+        // last one. The delay is OUTSIDE the stopwatch window, so it does
+        // not affect the timings.
         private const int InterMeasurementDelayMs = 1000;
 
         public BenchmarkPage()
@@ -31,101 +31,108 @@ namespace SfRTEPerformance
         // 1. Initial Control Load Benchmark (per-size buttons)
         // -----------------------------------------------------------------
 
-        // The five initial-load buttons all share the same body — they
+        // The initial-load buttons all share the same body — they
         // only differ in which HTML payload is pre-assigned in the editor
         // page's constructor. The stopwatch is started on the call site
         // so it captures every nanosecond from "user tapped the button"
-        // up to the editor's first paint.
+        // up to the editor actually rendering the document.
         private async void OnRunInitialLoadEmptyClicked(object? sender, EventArgs e)
         {
             AppendHeader("Initial Load");
-            await RunInitialLoadAsync(sizeLabel: "Empty", html: null);
+            await RunInitialLoadAsync(sizeLabel: "Empty");
         }
 
         private async void OnRunInitialLoad10KbClicked(object? sender, EventArgs e)
         {
             AppendHeader("Initial Load (10 KB)");
-            await RunInitialLoadAsync("10 KB", HtmlGenerator.GenerateSmallDocument());
+            await RunInitialLoadAsync("10 KB", marker => HtmlGenerator.GenerateSmallDocument(marker));
         }
 
         private async void OnRunInitialLoad500KbClicked(object? sender, EventArgs e)
         {
             AppendHeader("Initial Load (500 KB)");
-            await RunInitialLoadAsync("500 KB", HtmlGenerator.GenerateLargeDocument());
+            await RunInitialLoadAsync("500 KB", marker => HtmlGenerator.GenerateLargeDocument(marker));
         }
 
         private async void OnRunInitialLoad1MbClicked(object? sender, EventArgs e)
         {
             AppendHeader("Initial Load (1 MB)");
-            await RunInitialLoadAsync("1 MB", HtmlGenerator.GenerateExtraLargeDocument());
+            await RunInitialLoadAsync("1 MB", marker => HtmlGenerator.GenerateExtraLargeDocument(marker));
         }
 
-        // Shared body for the five initial-load buttons. The stopwatch
+        // Shared body for the initial-load buttons. The stopwatch
         // starts immediately before `new BenchmarkEditorPage(...)` so it
         // captures the page constructor, the editor construction, the
-        // pre-assignment of the HTML, the layout pass, and the first
-        // paint — i.e. the entire "from click to control rendering"
-        // pipeline the spec asks for.
-        private async Task RunInitialLoadAsync(string sizeLabel, string? html)
+        // pre-assignment of the HTML, the layout pass, and the document
+        // parse and render — i.e. the entire "from click to content on
+        // screen" pipeline the spec asks for.
+        //
+        // The stopwatch is stopped by BenchmarkEditorPage once the editor
+        // confirms the document was ingested (see ContentProbe).
+        private async Task RunInitialLoadAsync(string sizeLabel, Func<string, string>? htmlFactory = null)
         {
+            string? marker = null;
+            string? html = null;
+
+            if (htmlFactory is not null)
+            {
+                // A unique marker per run makes the probe immune to content
+                // that happens to be left over from a previous run.
+                marker = HtmlGenerator.Marker($"{sizeLabel.Replace(" ", string.Empty)}-{Guid.NewGuid():N}");
+                html = htmlFactory(marker);
+            }
+
             // Start the stopwatch IMMEDIATELY before the constructor so
             // the measurement includes page construction, editor
             // construction, the pre-assignment of HTML, the layout
-            // pass, the navigation animation, and the first paint.
+            // pass, and the WebView document parse and render.
             var stopwatch = Stopwatch.StartNew();
 
             var editorPage = new BenchmarkEditorPage(
                 initialLoadStopwatch: stopwatch,
                 initialHtml: html,
+                marker: marker,
                 bannerMessage: $"Initial Load ({sizeLabel}) - measuring...");
 
-            // Wait for the editor page to fully appear before returning,
-            // so the timing line is published only after the page is
-            // rendered. The user stays on the editor page afterwards
-            // and uses the Back button to return here.
             await RunEditorPageAsync(editorPage, afterReady: null);
-
-            // Sanity-print what we just measured, in case the user
-            // navigates back before reading the on-page banner.
-            AppendLine($"(See editor page banner for the {sizeLabel} load time.)");
         }
 
         // -----------------------------------------------------------------
-        // 2. Dynamic Value Update Benchmark (10 KB, 100 KB, 500 KB, 1 MB)
+        // 2. Dynamic Value Update Benchmark (500 KB, 1 MB)
         // -----------------------------------------------------------------
         private async void OnRunDynamicValueClicked(object? sender, EventArgs e)
         {
             AppendHeader("Dynamic Value Update");
 
             // Open ONE editor page, load a small initial document, and then
-            // reassign the Value property four times — once per target size.
+            // reassign the Value property twice — once per target size.
             // This matches the spec: re-measure Value assignment on a control
             // that has already been loaded.
-            string initialHtml = HtmlGenerator.GenerateSmallDocument();
+            string initialMarker = HtmlGenerator.Marker($"Initial-{Guid.NewGuid():N}");
+            string initialHtml = HtmlGenerator.GenerateSmallDocument(initialMarker);
 
             var stopwatch = Stopwatch.StartNew();
             var editorPage = new BenchmarkEditorPage(
                 initialLoadStopwatch: stopwatch,
                 initialHtml: initialHtml,
+                marker: initialMarker,
                 bannerMessage: "Measuring value updates...");
 
-            // The four Value-update measurements, each running on the
+            // The Value-update measurements each run on the
             // already-loaded editor. They are only kicked off AFTER the
             // editor page has signalled it is ready, otherwise the first
-            // assignment runs against a half-constructed control and
-            // reports 0 ms.
+            // assignment runs against a half-constructed control.
             //
-            // Between each measurement we wait
-            // InterMeasurementDelayMs so the user can see the per-iteration
-            // timing on the editor's banner before the next one fires.
-            // The delay is outside the stopwatch window, so it does not
-            // pollute the timings.
+            // Between each measurement we wait InterMeasurementDelayMs so the
+            // user can see the per-iteration timing on the editor's banner
+            // before the next one fires. The delay is outside the stopwatch
+            // window, so it does not pollute the timings.
             async Task BodyAsync(BenchmarkEditorPage page)
             {
                 await MeasureValueUpdateWithPreviewAsync(
-                    page, "500 KB", HtmlGenerator.GenerateLargeDocument());
+                    page, "500 KB", marker => HtmlGenerator.GenerateLargeDocument(marker));
                 await MeasureValueUpdateWithPreviewAsync(
-                    page, "1 MB", HtmlGenerator.GenerateExtraLargeDocument());
+                    page, "1 MB", marker => HtmlGenerator.GenerateExtraLargeDocument(marker));
             }
 
             await RunEditorPageAsync(editorPage, afterReady: BodyAsync);
@@ -140,20 +147,22 @@ namespace SfRTEPerformance
 
             // Generate the 10,000 paragraph HTML once (we time only the
             // editor load, not HTML generation, which is constant per run).
-            string html = HtmlGenerator.GenerateParagraphsDocument(10_000);
+            string marker = HtmlGenerator.Marker($"10K-{Guid.NewGuid():N}");
+            string html = HtmlGenerator.GenerateParagraphsDocument(10_000, marker);
 
             var stopwatch = Stopwatch.StartNew();
 
             var editorPage = new BenchmarkEditorPage(
                 initialLoadStopwatch: stopwatch,
                 initialHtml: html,
+                marker: marker,
                 bannerMessage: "Measuring 10,000 paragraph load...");
 
             await RunEditorPageAsync(editorPage, afterReady: null);
         }
 
         // -----------------------------------------------------------------
-        // 5. Apply Format Benchmark
+        // 4. Apply Format Benchmark
         // -----------------------------------------------------------------
         // Pushes the BenchmarkFormatPage, which has the SfRichTextEditor
         // and a row of basic formatting buttons (Bold, Italic, Underline,
@@ -206,7 +215,7 @@ namespace SfRTEPerformance
             BenchmarkResultsSink.LinePublished += OnBenchmarkLinePublished;
 
             // Set up the ready signal BEFORE pushing the page so we never
-            // miss the event if OnAppearing fires immediately after push.
+            // miss the event if it fires immediately after push.
             var readyTcs = new TaskCompletionSource<bool>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
             void OnReady()
@@ -219,6 +228,11 @@ namespace SfRTEPerformance
             {
                 await Navigation.PushAsync(editorPage);
 
+                // Wait for the editor to confirm it has ingested the
+                // document. This is the real end of the initial-load
+                // measurement — not the control's Loaded event.
+                await editorPage.MeasureInitialLoadAsync();
+
                 // Wait for the editor page to finish its first OnAppearing.
                 await readyTcs.Task;
 
@@ -230,8 +244,8 @@ namespace SfRTEPerformance
 
                 // NOTE: we intentionally do NOT pop the editor page here.
                 // The user stays on the editor page so they can inspect
-                // the content, and navigates back via the back button /
-                // the Back button on the editor page's toolbar.
+                // the content, and navigates back via the back gesture or
+                // the Back button on the editor page.
             }
             finally
             {
@@ -249,13 +263,13 @@ namespace SfRTEPerformance
         // Runs a single Value-update measurement with a "preview" banner
         // and a short inter-measurement pause so the user can see each
         // timing as the benchmark progresses. Without the pause the
-        // four measurements fire back-to-back and only the last one
-        // remains visible on the editor's banner.
+        // measurements fire back-to-back and only the last one remains
+        // visible on the editor's banner.
         //
         // The pause is OUTSIDE the stopwatch window, so it does not
         // affect the reported timings.
         private static async Task MeasureValueUpdateWithPreviewAsync(
-            BenchmarkEditorPage page, string sizeLabel, string html)
+            BenchmarkEditorPage page, string sizeLabel, Func<string, string> htmlFactory)
         {
             // Show what is about to run, so the user has a clear
             // "next" indicator on the banner.
@@ -267,9 +281,15 @@ namespace SfRTEPerformance
 
             // The actual measurement — this is what the benchmark
             // reports. The Stopwatch is started and stopped inside
-            // MeasureValueUpdate, so the preview delay above is not
+            // MeasureValueUpdateAsync, so the preview delay above is not
             // included in the timing.
-            page.MeasureValueUpdate(sizeLabel, html);
+            //
+            // A fresh marker per iteration guarantees the probe detects
+            // THIS assignment and not leftover content from the previous
+            // one.
+            string marker = HtmlGenerator.Marker($"{sizeLabel}-{Guid.NewGuid():N}");
+            string html = htmlFactory(marker);
+            await page.MeasureValueUpdateAsync(sizeLabel, html, marker);
 
             // Pause again so the user can read the timing before the
             // next iteration's preview overwrites it.
